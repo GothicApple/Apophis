@@ -190,7 +190,7 @@ uint64_t* zalloc(uint64_t size);
 
 // ------------------------ GLOBAL CONSTANTS -----------------------
 
-char* SELFIE_URL = (char*) 0;
+char* SELFIE_URL = (char*) 0; // 
 
 uint64_t CHAR_EOF          =  -1; // end of file
 uint64_t CHAR_BACKSPACE    =   8; // ASCII code 8  = backspace
@@ -217,6 +217,9 @@ uint64_t CHAR_EXCLAMATION  = '!';
 uint64_t CHAR_LT           = '<';
 uint64_t CHAR_GT           = '>';
 uint64_t CHAR_BACKSLASH    =  92; // ASCII code 92 = backslash
+uint64_t CHAR_NULL         =   0;
+uint64_t CHAR_X            = 'x';
+
 
 uint64_t CPUBITWIDTH = 64;
 
@@ -349,6 +352,8 @@ uint64_t find_next_character();
 
 uint64_t is_character_letter();
 uint64_t is_character_digit();
+uint64_t is_character_digit_letter();
+uint64_t is_character_hex();
 uint64_t is_character_letter_or_digit_or_underscore();
 uint64_t is_character_not_double_quote_or_new_line_or_eof();
 
@@ -400,11 +405,14 @@ uint64_t SYM_INT      = 28; // int
 uint64_t SYM_CHAR     = 29; // char
 uint64_t SYM_UNSIGNED = 30; // unsigned
 
+uint64_t SYM_HEX_PREFIX = 31; // 0x
+
 uint64_t* SYMBOLS; // strings representing symbols
 
 uint64_t MAX_IDENTIFIER_LENGTH = 64;  // maximum number of characters in an identifier
 uint64_t MAX_INTEGER_LENGTH    = 20;  // maximum number of characters in an unsigned integer
 uint64_t MAX_STRING_LENGTH     = 128; // maximum number of characters in a string
+uint64_t MAX_HEX_LENGTH        = 16; 
 
 // ------------------------ GLOBAL VARIABLES -----------------------
 
@@ -413,6 +421,7 @@ uint64_t line_number = 1; // current line number for error reporting
 char* identifier = (char*) 0; // stores scanned identifier as string
 char* integer    = (char*) 0; // stores scanned integer as string
 char* string     = (char*) 0; // stores scanned string
+char* hex        = (char*) 0; // stores scanned hex integer 
 
 uint64_t literal = 0; // stores numerical value of scanned integer or character
 
@@ -464,6 +473,7 @@ void init_scanner () {
   *(SYMBOLS + SYM_LEQ)          = (uint64_t) "<=";
   *(SYMBOLS + SYM_GT)           = (uint64_t) ">";
   *(SYMBOLS + SYM_GEQ)          = (uint64_t) ">=";
+  *(SYMBOLS + SYM_HEX_PREFIX)   = (uint64_t) "0x";
 
   *(SYMBOLS + SYM_INT)      = (uint64_t) "int";
   *(SYMBOLS + SYM_CHAR)     = (uint64_t) "char";
@@ -2185,6 +2195,22 @@ uint64_t atoi(char* s) {
   // bit shifting since memory access can only be done in double words
   c = load_character(s, i);
 
+  
+
+  if(c == 'a'){ n = 10; return n; }
+  if(c == 'A'){ n = 10; return n; }
+  if(c == 'b'){ n = 11; return n; }
+  if(c == 'B'){ n = 11; return n; }
+  if(c == 'c'){ n = 12; return n; }
+  if(c == 'C'){ n = 12; return n; }
+  if(c == 'd'){ n = 13; return n; }
+  if(c == 'D'){ n = 13; return n; }
+  if(c == 'e'){ n = 14; return n; }
+  if(c == 'E'){ n = 14; return n; }
+  if(c == 'f'){ n = 15; return n; }
+  if(c == 'F'){ n = 15; return n; }
+    
+
   // loop until s is terminated
   while (c != 0) {
     // the numerical value of ASCII-encoded decimal digits
@@ -2861,6 +2887,43 @@ uint64_t find_next_character() {
   }
 }
 
+/*
+uint64_t is_first_character_null = 0;
+uint64_t is_character_hex_prefix(){
+  if(character =='0')
+    if(is_first_character_null == 0)
+      is_first_character_null = 1;
+      else 
+        is_first_character_null = 0;
+
+  if(character == 'x')
+    if(is_first_character_null==1)
+      return 1;
+
+  return 0;
+}
+*/
+
+uint64_t is_character_hex(){
+  if(is_character_digit())
+    return 1;
+    else return 0;
+  
+ if (character >= 'a')
+    if (character <= 'F')
+      return 1;
+    else
+      return 0;
+  else if (character >= 'A')
+    if (character <= 'F')
+      return 1;
+    else
+      return 0;
+  else
+    return 0;
+
+}
+
 uint64_t is_character_letter() {
   // ASCII codes for lower- and uppercase letters are in contiguous intervals
   if (character >= 'a')
@@ -2886,6 +2949,14 @@ uint64_t is_character_digit() {
       return 0;
   else
     return 0;
+}
+
+uint64_t is_character_digit_or_letter(){
+  if (is_character_letter())
+    return 1;
+  else if (is_character_digit())
+    return 1;
+    else return 0;
 }
 
 uint64_t is_character_letter_or_digit_or_underscore() {
@@ -2950,7 +3021,32 @@ void get_symbol() {
     if (symbol != SYM_DIV) {
       // '/' may have already been recognized
       // while looking for whitespace and "//"
-      if (is_character_letter()) {
+      if(character == '0'){
+        get_character();
+        if(character == 'x'){
+          hex = string_alloc(MAX_HEX_LENGTH);
+          store_character(hex,0,'0');
+          store_character(hex,0,'x');
+          i = 2;
+
+          while(is_character_hex()){
+            if(i >= MAX_HEX_LENGTH){
+              syntax_error_message("hex out of bound");
+
+              exit(EXITCODE_SCANNERERROR);
+            }
+          }
+          store_character(hex, i, 0); // null-terminated string
+          //integer = string_alloc(MAX_INTEGER_LENGTH);
+          //integer = itoa(20, hex, 16, 0);
+          literal = atoi(hex);
+          symbol = SYM_INTEGER;
+        }else{
+          literal = 0;
+          symbol = SYM_INTEGER;
+        }
+
+      }else if (is_character_letter()) {
         // accommodate identifier and null for termination
         identifier = string_alloc(MAX_IDENTIFIER_LENGTH);
 
@@ -2962,7 +3058,7 @@ void get_symbol() {
 
             exit(EXITCODE_SCANNERERROR);
           }
-
+        
           store_character(identifier, i, character);
 
           i = i + 1;
@@ -12734,7 +12830,9 @@ void print_usage() {
 
 uint64_t selfie() {
   char* option;
-printf1("%sThis is Konstantin Vorovskiy Selfie \n", selfie_name);
+
+  printf1("%sThis is Konstantin Vorovskiy Selfie \n", selfie_name);
+
   if (number_of_remaining_arguments() == 0)
     print_usage();
   else {
